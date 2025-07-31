@@ -1,0 +1,230 @@
+package nemosofts.streambox.activity;
+
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.OptIn;
+import androidx.media3.common.util.UnstableApi;
+import androidx.nemosofts.AppCompatActivity;
+import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
+import java.util.Collections;
+
+import nemosofts.streambox.R;
+import nemosofts.streambox.activity.epg.EPGOneActivity;
+import nemosofts.streambox.activity.epg.EPGTwoActivity;
+import nemosofts.streambox.adapter.AdapterCat;
+import nemosofts.streambox.item.ItemCat;
+import nemosofts.streambox.util.ApplicationUtil;
+import nemosofts.streambox.util.IfSupported;
+import nemosofts.streambox.util.helper.Helper;
+import nemosofts.streambox.util.helper.JSHelper;
+import nemosofts.streambox.util.helper.SPHelper;
+import nemosofts.streambox.view.NSoftsProgressDialog;
+
+public class CategoriesActivity extends AppCompatActivity {
+
+    private Helper helper;
+    private SPHelper spHelper;
+    private JSHelper jsHelper;
+    private RecyclerView rv;
+    private ArrayList<ItemCat> arrayList;
+    private AdapterCat adapter;
+    private FrameLayout frameLayout;
+    private NSoftsProgressDialog progressDialog;
+
+    @OptIn(markerClass = UnstableApi.class)
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        IfSupported.IsRTL(this);
+        IfSupported.IsScreenshot(this);
+        IfSupported.hideStatusBar(this);
+
+        findViewById(R.id.theme_bg).setBackgroundResource(ApplicationUtil.openThemeBg(this));
+        findViewById(R.id.iv_back_page).setOnClickListener(view -> finish());
+        if (ApplicationUtil.isTvBox(this)){
+            findViewById(R.id.iv_back_page).setVisibility(View.GONE);
+        }
+
+        progressDialog = new NSoftsProgressDialog(CategoriesActivity.this);
+
+        jsHelper = new JSHelper(this);
+        spHelper = new SPHelper(this);
+
+        helper = new Helper(this, (position, type) -> {
+            Intent intent;
+            if (spHelper.getIsThemeEPG() == 1){
+                intent = new Intent(CategoriesActivity.this, EPGOneActivity.class);
+            } else if (spHelper.getIsThemeEPG() == 2){
+                intent = new Intent(CategoriesActivity.this, EPGTwoActivity.class);
+            } else {
+                intent = new Intent(CategoriesActivity.this, EPGTwoActivity.class);
+            }
+            intent.putExtra("cat_id", arrayList.get(position).getId());
+            intent.putExtra("cat_name", arrayList.get(position).getName());
+            startActivity(intent);
+        });
+
+        arrayList = new ArrayList<>();
+
+        frameLayout = findViewById(R.id.fl_empty);
+        rv = findViewById(R.id.rv);
+
+        GridLayoutManager grid = new GridLayoutManager(this, 2);
+        grid.setSpanCount(2);
+        rv.setLayoutManager(grid);
+        rv.setItemAnimator(new DefaultItemAnimator());
+        rv.setHasFixedSize(true);
+
+        getData();
+    }
+
+    @Override
+    public int setContentViewID() {
+        return R.layout.activity_categories;
+    }
+
+    @SuppressLint("StaticFieldLeak")
+    private void getData() {
+        new AsyncTask<String, String, String>() {
+
+            @Override
+            protected void onPreExecute() {
+                progressDialog.show();
+                super.onPreExecute();
+            }
+
+            @Override
+            protected String doInBackground(String... strings) {
+                try {
+                    arrayList.addAll(jsHelper.getCategoryLive());
+                    if (!arrayList.isEmpty() && Boolean.TRUE.equals(jsHelper.getIsCategoriesOrder())) {
+                        Collections.reverse(arrayList);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                return null;
+            }
+
+            @Override
+            protected void onPostExecute(String s) {
+                super.onPostExecute(s);
+                progressDialog.dismiss();
+                if (!isFinishing()){
+                    if (!arrayList.isEmpty()){
+                        setAdapterToListview();
+                    } else {
+                        setEmpty();
+                    }
+                }
+            }
+        }.execute();
+    }
+
+    public void setAdapterToListview() {
+        adapter = new AdapterCat(true, arrayList, position -> helper.showInterAd(position,""));
+        rv.setAdapter(adapter);
+        // Set up search functionality
+        setupSearchFunctionality();
+    }
+
+    private void setupSearchFunctionality() {
+        EditText edt_search = findViewById(R.id.edt_search);
+        edt_search.setVisibility(View.VISIBLE);
+        edt_search.setOnEditorActionListener((v, actionId, event) -> {
+            InputMethodManager inputManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            View currentFocus = this.getCurrentFocus();
+            if (currentFocus != null) {
+                inputManager.hideSoftInputFromWindow(currentFocus.getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
+            }
+            return true;
+        });
+        edt_search.addTextChangedListener(searchWatcher);
+        setEmpty();
+    }
+
+    TextWatcher searchWatcher = new TextWatcher() {
+        @Override
+        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            // Not used, can be left empty
+        }
+
+        @SuppressLint("NotifyDataSetChanged")
+        @Override
+        public void onTextChanged(CharSequence s, int start, int before, int count) {
+            if (adapter != null) {
+                adapter.getFilter().filter(s.toString());
+                adapter.notifyDataSetChanged();
+            }
+        }
+
+        @Override
+        public void afterTextChanged(Editable s) {
+            // Not used, can be left empty
+        }
+    };
+
+    private void setEmpty() {
+        if (!arrayList.isEmpty()) {
+            rv.setVisibility(View.VISIBLE);
+            frameLayout.setVisibility(View.GONE);
+            if (ApplicationUtil.isTvBox(this)){
+                rv.requestFocus();
+            }
+        } else {
+            rv.setVisibility(View.GONE);
+            frameLayout.setVisibility(View.VISIBLE);
+
+            frameLayout.removeAllViews();
+
+            LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+
+            @SuppressLint("InflateParams") View myView = inflater.inflate(R.layout.row_empty, null);
+
+            myView.findViewById(R.id.tv_empty_msg_sub).setVisibility(View.GONE);
+
+            frameLayout.addView(myView);
+        }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, @NonNull KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (keyCode == KeyEvent.KEYCODE_BACK){
+                finish();
+                return true;
+            } else if (keyCode == KeyEvent.KEYCODE_HOME){
+                ApplicationUtil.openHomeActivity(this);
+                return true;
+            }
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public void onDestroy() {
+        if (progressDialog != null && progressDialog.isShowing()){
+            progressDialog.cancel();
+        }
+        super.onDestroy();
+    }
+}

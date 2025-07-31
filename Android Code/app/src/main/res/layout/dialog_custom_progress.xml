@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.nemosofts.view.ProgressBarView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="@dimen/_45sdp"
+    android:layout_height="@dimen/_45sdp"
+    android:padding="@dimen/_5sdp"
+    android:layout_margin="@dimen/_5sdp"
+    app:pb_color="#FFee44"
+    app:pb_colors="@array/progress_colors"
+    app:pb_max_sweep_angle="300"
+    app:pb_min_sweep_angle="10"
+    app:pb_rotation_speed="1.0"
+    app:pb_stroke_width="@dimen/_3sdp"
+    app:pb_sweep_speed="1.0"
+    android:background="@drawable/bg_card"
+    android:indeterminate="true"
+    android:layout_centerInParent="true"/>
